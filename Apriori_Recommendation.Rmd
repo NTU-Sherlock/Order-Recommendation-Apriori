@@ -49,13 +49,14 @@ g-table-intro h4 {
 ---
 
 <br/>
-###Introduction
+### Introduction
 
-**Durning last internship, I use apriori to improved the recommendation system of my company, KKday. <a href = "https://www.kkday.com">KKday</a> is the leading e-commerce travel platform in asia. In this article I am going to use the sales data from KKday to illustrate the performance and difference of apriori and distance-based recommendation system.**
+**Durning last internship, I use apriori to improved the recommendation system of my company, KKday. <a href = "https://www.kkday.com">KKday</a> is a leading e-commerce travel platform in asia. In this article I am going to use the sales data from KKday to illustrate the performance and difference of apriori and distance-based recommendation system.**
 
 
 ---
 <br/>
+
 ### Data Preprocessing
 
 ```{r echo=FALSE}
