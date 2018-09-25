@@ -1,0 +1,321 @@
+---
+title: "Apriori Recommendation on Ecommerce product"
+author: "Wen-Shiuan Liang"
+framework: bootstrap
+github:
+  branch: gh-pages
+  repo: rCharts_nyt_home_price
+  user: timelyportfolio
+highlighter: prettify
+hitheme: twitter-bootstrap
+mode: selfcontained
+assets:
+  css:
+  - http://fonts.googleapis.com/css?family=Raleway:300
+  - http://fonts.googleapis.com/css?family=Oxygen
+widgets: nyt_home
+---
+
+<style>
+body{
+  font-family: 'Oxygen', sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+h1,h2,h3,h4 {
+  font-family: 'Raleway', sans-serif;
+}
+
+.container { width: 1000px; }
+h3 {
+  background-color: #D4DAEC;
+  text-indent: 100px; 
+}
+h4 {
+  text-indent: 100px;
+}
+
+g-table-intro h4 {
+  text-indent: 0px;
+}
+</style>
+
+<a href="https://github.com/NTU-Sherlock/Recommendation"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"></a>
+
+
+#Product Recommendation after purchase -- Does apriori make better recommendation?
+
+---
+
+<br/>
+###Introduction
+
+**Durning last internship, I use apriori to improved the recommendation system of my company, KKday. <a href = "https://www.kkday.com">KKday</a> is the leading e-commerce travel platform in asia. In this article I am going to use the sales data from KKday to illustrate the performance and difference of apriori and distance-based recommendation system.**
+
+
+---
+<br/>
+### Data Preprocessing
+
+```{r echo=FALSE}
+###Import order dataset
+data = read.csv("~/Google Drive/kkday/ Data Team Project/order_uesr.csv",header=TRUE,stringsAsFactors = FALSE)
+```
+
+```{r }
+require(dplyr)
+require('DT')
+```
+
+<h4> The Original Data</h4>
+```{r}
+head(data,10)
+```
+The data contains products which has been ordered by users. 'product_oid' is the code of each product, while user_id is user who bought the product. For example, we can say user '132591' has bought product '8332' and '3598' together.
+
+<h4>Combine Orders by Same User</h4>
+
+```{r}
+df <- data %>%
+  group_by(user_id) %>%
+  summarise(prod_oid_paste = paste(prod_oid, collapse=" "),
+            n = n()) %>% filter(n >1) #remove order that only contain one product
+head(df)
+
+retail.list <-  df
+#Seperate by ""
+retail.list <- sapply(retail.list$prod_oid_paste,strsplit, " ")
+head(retail.list)
+```
+
+The data has to be transfromed in to 'transaction' type in order to fit in the packages, arules, which we will explore later.
+
+Therefore, we have to group data by user_id, and paste the orders together. Now, the original data.frame has transformed into list, and each row means a market basket ordered by certain customer.
+
+<h4>Transfrom Order Data into Transaction Data</h4>
+```{r}
+require(arules)
+```
+
+```{r}
+retail.trans <- as(retail.list, "transactions")
+summary(retail.trans)
+```
+
+By transforming into transactions data and using summary function, we can see product '2674' is the most frequent product which appeared in 12115 customers' orders. And the
+median product in customers' orders is 2 -> at least 50 % people have only two product in each order.
+
+### Applying Association Rules
+Depends on researcher's experience and the purpose, we have to set three parameters in arules: confidence, support, and lift, to extract meaninful patterns.
+
+Here we are going to set support, confidece as threshold, which is common in most research. 
+
+<h4>Setting Parameters to extract frequent patterns</h4>
+```{r}
+sup = 0.0001
+conf = 0.1
+retail.rules <- apriori(retail.trans, parameter=list(supp=sup, conf=conf))
+```
+
+Knowing that there are thousands of products on KKday, we set a conservative threshould to secure that we could have enough patterns for recommendation. And we get 4400 association rules eventually.
+
+
+
+<h4>Visualize the support/confidence distribution with arulesViz</h4>
+```{r}
+# install.packages("arulesViz")
+library(arulesViz)
+arulesViz::plotly_arules(retail.rules)
+```
+This interactive visualization tools can help us determine the parameters. By observing the distribution and the number of rules, we can see whether to increase the threshold or not.
+
+<h4>Which products are most frequently bought together</h4>
+```{r}
+retail.conf <- head(sort(retail.rules, by="confidence"), 20)
+inspect(retail.conf)
+```
+By sorting the rules from highest confidence, we can see that the product '12225' has 100% chance being bought together with 11359, yet this combination only has been bought for 28 times, which only count for 0.01% of total orders. On the other hand, Product '5260' has 81% chance being bought together with '5925', and '1559' people have bought the same bundle. This means that we could to recommend '1559' to any those customer who has bought '5925'. 
+
+<h4>What are the patterns that contain most products</h4>
+```{r}
+rules_length <- lapply(LIST(retail.rules@lhs), function(x) unlist(strsplit(x, " ")))
+retail_long <- head(retail.rules[order(lengths(rules_length),retail.rules@quality$confidence,decreasing = TRUE)],20)
+inspect(retail_long)
+```
+
+We can see that the first 4 patterns of rhs are product '2914', meaning these products often bought together.
+
+<h4> Network Graph</h4>
+```{r warning = FALSE}
+plot(retail.rules, method="graph", control=list(type="items"))
+```
+
+The network graph shows associations between selected products. Larger circles imply higher support, while red circles imply higher lift.
+
+- The most popular order was of '2674' and '2685', another popular orders was of '2689' and '2685'
+
+- If someone buys '17899', he is likely to have bought 4051 as well
+- Relatively many people buy '5260' along with 'sliced cheese'5925' (1559 times)
+
+
+```{r}
+#-------------Form Function for product recommendation--------------
+#Test any basket you like
+new_basket = c('7781')
+next_buy = function(new_basket){
+  it_new_basket = as(list(new_basket), "itemMatrix")
+# find all rules, where the lhs is a subset of the current new_basket
+  rulesMatchLHS <- is.subset(retail.rules@lhs,it_new_basket)
+# and the rhs is NOT a subset of the current new_basket (so that some items are left as potential recommendation)
+  suitableRules <-  rulesMatchLHS & !(is.subset(retail.rules@rhs,it_new_basket))
+  possible_recomed = retail.rules[as.logical(suitableRules)]
+  if(length(possible_recomed)==0){
+    print('No association rules pass the threshold, consider other possible combination ')
+  }else{
+    # now extract the matching rhs ...
+    # recommendations <- strsplit(LIST(possible_recomed@lhs)[order(lengths(lst1), decreasing = TRUE)][[1]],split=" ")
+    lst1 <- lapply(LIST(possible_recomed@lhs), function(x) unlist(strsplit(x, " ")))
+    # lst2 <- order(possible_recomed@quality$confidence,decreasing = TRUE)
+    # LIST(possible_recomed@lhs)[order(lengths(lst1), decreasing = TRUE)]  
+    recommendations <- strsplit(LIST(possible_recomed@rhs)[[order(possible_recomed@quality$confidence, decreasing = TRUE)[1]]],split=" ")
+    print("Potential recommendations are...")
+    inspect(possible_recomed[order(possible_recomed@quality$confidence, decreasing = TRUE),])
+     recommendations <- lapply(recommendations,function(x){paste(x,collapse=" ")})
+    recommendations <- as.character(recommendations)
+    print(paste("Best recommendation would be ",recommendations))
+    return(as.character(recommendations))
+  }
+}
+```
+
+
+#--------------Recommendation system over=-------------
+
+#Reverse recommendation: What other products would lead to this one
+target_one = 11731
+rules<-apriori(data=retail.trans, parameter=list(supp=sup,conf = conf,minlen=2), 
+               appearance = list(default="lhs",rhs=target_one),
+               control = list(verbose=F))
+rules<-sort(rules, decreasing=TRUE,by="confidence")
+inspect(rules)
+next_buy(target_one)
+
+#Test some basket
+next_buy("11731")
+basket = c("2014","2674")
+next_buy(basket)
+
+###Comparison with consine distance
+
+```{r}
+DT_filter =  data
+product_list <- unique(DT_filter$prod_oid)
+user_list <- unique(DT_filter$user_id)
+product_list_len <- length(product_list)
+user_list_len <- length(user_list)
+prod_len <- c(1:product_list_len)
+
+prod_user_temp <- Matrix(rep(0,user_list_len), nrow = 1)
+prod_user <- Matrix(rep(0,user_list_len), nrow = 1)
+prod_user <- Matrix(0, nrow =product_list_len ,ncol = user_list_len)
+
+# for(i in 2 : product_list_len){
+#   prod_user <<- rbind(prod_user, prod_user_temp)
+# }
+colnames(prod_user) <- user_list
+
+temp <- sapply(prod_len, function(x){
+  DT_filter_i_user <- DT_filter %>%
+    filter(prod_oid == product_list[x]) %>%
+    select(user_id)
+  DT_filter_i_user_v <- as.vector(t(DT_filter_i_user))
+  prod_user[x,DT_filter_i_user_v] <<- 1
+  rm(DT_filter_i_user, DT_filter_i_user_v)
+  if(x %% 500 == 0){
+    print(paste0(x,'/',product_list_len))
+  }
+})
+
+print("prod_user matrix finish")
+rm(DT_filter,temp)
+DT_filter_matrix <- prod_user
+row.names(DT_filter_matrix) <- product_list
+rm(prod_user)
+
+
+
+DT_rowSums <- rowSums(DT_filter_matrix)
+DT_rowSums_under_5 <- names(DT_rowSums)[DT_rowSums<=5]
+rm(DT_rowSums)
+
+print("start calculating cosine_score_matrix")
+
+xxt <- DT_filter_matrix %*% t(DT_filter_matrix)
+diag_xxt <- sqrt(diag(1/diag(xxt)))
+score_matrix <- diag_xxt %*% xxt %*% diag_xxt
+rownames(score_matrix) <- rownames(DT_filter_matrix)
+colnames(score_matrix) <- rownames(DT_filter_matrix)
+rm(xxt,diag_xxt)
+score_matrix <- as.matrix(score_matrix)
+
+DT_similar_prod <- data.frame(similar_prod_oid = rep(NA_real_,product_list_len*20),
+                              score =  rep(NA_real_,product_list_len*20),
+                              prod_oid = rep(NA_real_,product_list_len*20))
+
+t1 <- Sys.time()
+temp <- sapply(prod_len, function(x){
+  DT_similar_prod[(20*x-19):(20*x),] <<-
+    data.frame(score = score_matrix[x,],
+               similar_prod_oid = product_list)[-x,] %>%
+    arrange(desc(score)) %>%
+    mutate(score_order = c(1:(product_list_len-1))) %>%
+    filter(score_order <=20) %>%
+    select(similar_prod_oid, score) %>%
+    mutate(prod_oid = product_list[x])
+  if(x %% 500 == 0){
+    print(paste0(x,'/',product_list_len))
+  }
+} )
+rm(temp)
+
+gc()
+print("End of calculation cosine_score_matrix")
+
+```
+
+
+###Cosine distance vs. Apriori
+
+```{r}
+#Apriori result
+#Recommendation after buying
+
+target_one = c(1446)
+next_buy(target_one)
+
+#Cosine result
+head(DT_similar_prod[DT_similar_prod$prod_oid==target_one,],10)
+
+
+#Reverse recommendation: Product lead to this product
+
+rules<-apriori(data=retail.trans, parameter=list(supp=sup,conf = conf,minlen=2), 
+               appearance = list(default="lhs",rhs=target_one),
+               control = list(verbose=F))
+rules<-sort(rules, decreasing=TRUE,by="confidence")
+head(inspect(rules))
+
+head(DT_similar_prod[DT_similar_prod$similar_prod_oid==target_one,],10)
+
+```
+
+#----------------------------------------
+d = data.frame(
+      data,
+      stringsAsFactors = FALSE
+    )
+    data <- datatable(d, filter = 'bottom', options = list(pageLength = 5))
+    data
+
+
