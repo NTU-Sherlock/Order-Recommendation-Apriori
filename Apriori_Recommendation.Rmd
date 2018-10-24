@@ -1,5 +1,5 @@
 ---
-title: "Apriori Recommendation on Ecommerce product"
+title: "Apriori Recommendation on Ecommerce Product"
 author: "Wen-Shiuan Liang"
 framework: bootstrap
 github:
@@ -44,14 +44,15 @@ g-table-intro h4 {
 <a href="https://github.com/NTU-Sherlock/Recommendation"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"></a>
 
 
-#Product Recommendation after purchase -- Does apriori make better recommendation?
+#Product Recommendation After Purchase -- Does Apriori Make a Better Recommendation?
 
 ---
 
 <br/>
+
 ### Introduction
 
-**Durning last internship, I use apriori to improved the recommendation system of my company, KKday. <a href = "https://www.kkday.com">KKday</a> is a leading e-commerce travel platform in asia. In this article I am going to use the sales data from KKday to illustrate the performance and difference of apriori and distance-based recommendation system.**
+**Durning last internship, I used apriori to improve the recommendation system of my company, KKday. <a href = "https://www.kkday.com">KKday</a> is a leading e-commerce travel platform in South East Asia. In this article, I am going to use the sales data from KKday to illustrate the performance and difference of apriori and distance-based recommendation system.**
 
 
 ---
@@ -73,7 +74,7 @@ require('DT')
 ```{r}
 head(data,10)
 ```
-The data contains products which has been ordered by users. 'product_oid' is the code of each product, while user_id is user who bought the product. For example, we can say user '132591' has bought product '8332' and '3598' together.
+The data contains products in past 14 days which have been ordered by users. 'product_oid' is the code of each product, while user_id is an user who bought the product. For example, we can say user '132591' has bought the product '8332' and '3598' together.
 
 <h4>Combine Orders by Same User</h4>
 
@@ -90,9 +91,9 @@ retail.list <- sapply(retail.list$prod_oid_paste,strsplit, " ")
 head(retail.list)
 ```
 
-The data has to be transfromed in to 'transaction' type in order to fit in the packages, arules, which we will explore later.
+The data has to be transformed into 'transaction' type in order to fit in the packages, arules, which we will explore later.
 
-Therefore, we have to group data by user_id, and paste the orders together. Now, the original data.frame has transformed into list, and each row means a market basket ordered by certain customer.
+Therefore, we have to group data by user_id and paste the orders together. Now, the original dataframe has been transformed into a list, and each row means a market basket ordered by a certain customer.
 
 <h4>Transfrom Order Data into Transaction Data</h4>
 ```{r}
@@ -104,13 +105,12 @@ retail.trans <- as(retail.list, "transactions")
 summary(retail.trans)
 ```
 
-By transforming into transactions data and using summary function, we can see product '2674' is the most frequent product which appeared in 12115 customers' orders. And the
-median product in customers' orders is 2 -> at least 50 % people have only two product in each order.
+By transforming into transactions data and using the summary function, we can see product '2674' is the most frequent product which appeared in 12115 customers' orders. And the median product in customers' orders is 2 -> at least 50 % of people have only two product in each order.
 
-### Applying Association Rules
-Depends on researcher's experience and the purpose, we have to set three parameters in arules: confidence, support, and lift, to extract meaninful patterns.
+### Implementing Association Rules
+Depends on researcher's experience and the purpose, we have to set three parameters in arules: confidence, support, and lift, to extract meaningful patterns.
 
-Here we are going to set support, confidece as threshold, which is common in most research. 
+Here we are going to set support, confidence as thresholds, which is common in most research. 
 
 <h4>Setting Parameters to extract frequent patterns</h4>
 ```{r}
@@ -119,12 +119,12 @@ conf = 0.1
 retail.rules <- apriori(retail.trans, parameter=list(supp=sup, conf=conf))
 ```
 
-Knowing that there are thousands of products on KKday, we set a conservative threshould to secure that we could have enough patterns for recommendation. And we get 4400 association rules eventually.
+Knowing that there are thousands of products on KKday, we set a conservative threshould to secure that we could have enough patterns to make recommendation. We get 4400 association rules eventually.
 
 
 
 <h4>Visualize the support/confidence distribution with arulesViz</h4>
-```{r}
+```{r message=FALSE, warning = FALSE}
 # install.packages("arulesViz")
 library(arulesViz)
 arulesViz::plotly_arules(retail.rules)
@@ -145,25 +145,24 @@ retail_long <- head(retail.rules[order(lengths(rules_length),retail.rules@qualit
 inspect(retail_long)
 ```
 
-We can see that the first 4 patterns of rhs are product '2914', meaning these products often bought together.
+We can see that the first 4 patterns of rhs are product '2914', meaning that these products are often being bought together.
 
 <h4> Network Graph</h4>
-```{r warning = FALSE}
+```{r message = FALSE}
 plot(retail.rules, method="graph", control=list(type="items"))
 ```
 
 The network graph shows associations between selected products. Larger circles imply higher support, while red circles imply higher lift.
 
-- The most popular order was of '2674' and '2685', another popular orders was of '2689' and '2685'
+- The most popular order was of '2674' and '2685', another popular orders were '2689' and '2685'
 
 - If someone buys '17899', he is likely to have bought 4051 as well
 - Relatively many people buy '5260' along with 'sliced cheese'5925' (1559 times)
 
+### Try Pratical Work with Recommendation
+<h4> Form the Recommendation Function</h4>
 
 ```{r}
-#-------------Form Function for product recommendation--------------
-#Test any basket you like
-new_basket = c('7781')
 next_buy = function(new_basket){
   it_new_basket = as(list(new_basket), "itemMatrix")
 # find all rules, where the lhs is a subset of the current new_basket
@@ -173,13 +172,10 @@ next_buy = function(new_basket){
   possible_recomed = retail.rules[as.logical(suitableRules)]
   if(length(possible_recomed)==0){
     print('No association rules pass the threshold, consider other possible combination ')
-  }else{
-    # now extract the matching rhs ...
-    # recommendations <- strsplit(LIST(possible_recomed@lhs)[order(lengths(lst1), decreasing = TRUE)][[1]],split=" ")
+  } # Report no applicable association rules for the threshold
+  else{
     lst1 <- lapply(LIST(possible_recomed@lhs), function(x) unlist(strsplit(x, " ")))
-    # lst2 <- order(possible_recomed@quality$confidence,decreasing = TRUE)
-    # LIST(possible_recomed@lhs)[order(lengths(lst1), decreasing = TRUE)]  
-    recommendations <- strsplit(LIST(possible_recomed@rhs)[[order(possible_recomed@quality$confidence, decreasing = TRUE)[1]]],split=" ")
+    recommendations <- strsplit(LIST(possible_recomed@rhs)[[order(possible_recomed@quality$confidence, decreasing = TRUE)[1]]],split=" ")# Report the possible recommendation by the order of confidence
     print("Potential recommendations are...")
     inspect(possible_recomed[order(possible_recomed@quality$confidence, decreasing = TRUE),])
      recommendations <- lapply(recommendations,function(x){paste(x,collapse=" ")})
@@ -190,26 +186,34 @@ next_buy = function(new_basket){
 }
 ```
 
+<h4> Enter any ProductID you are interested in</h4>
+```{r}
+#Test any basket you like
+new_basket = c('19252')
+next_buy(new_basket)
+```
 
-#--------------Recommendation system over=-------------
+We can see the best recommendation after buying product 19252 is 10759
 
-#Reverse recommendation: What other products would lead to this one
+
+<h4> Reverse Recommendation: What Products Induce the purchasement of the Objective??</h4>
+
+```{r}
 target_one = 11731
 rules<-apriori(data=retail.trans, parameter=list(supp=sup,conf = conf,minlen=2), 
                appearance = list(default="lhs",rhs=target_one),
                control = list(verbose=F))
-rules<-sort(rules, decreasing=TRUE,by="confidence")
+rules<-head(sort(rules, decreasing=TRUE,by="confidence"),20)
 inspect(rules)
-next_buy(target_one)
 
-#Test some basket
-next_buy("11731")
-basket = c("2014","2674")
-next_buy(basket)
+```
 
-###Comparison with consine distance
+### Model Comparisons: Cosine Distance vs. Apriori
 
-```{r}
+
+<h4> Import Cosine Distance Recommendation unction</h4>
+
+```{r echo =FALSE}
 DT_filter =  data
 product_list <- unique(DT_filter$prod_oid)
 user_list <- unique(DT_filter$user_id)
@@ -286,7 +290,7 @@ print("End of calculation cosine_score_matrix")
 ```
 
 
-###Cosine distance vs. Apriori
+<h4> Experiments on Different Combination</h4>
 
 ```{r}
 #Apriori result
@@ -295,28 +299,23 @@ print("End of calculation cosine_score_matrix")
 target_one = c(1446)
 next_buy(target_one)
 
-#Cosine result
+#Cosine Result
 head(DT_similar_prod[DT_similar_prod$prod_oid==target_one,],10)
-
-
-#Reverse recommendation: Product lead to this product
-
-rules<-apriori(data=retail.trans, parameter=list(supp=sup,conf = conf,minlen=2), 
-               appearance = list(default="lhs",rhs=target_one),
-               control = list(verbose=F))
-rules<-sort(rules, decreasing=TRUE,by="confidence")
-head(inspect(rules))
-
-head(DT_similar_prod[DT_similar_prod$similar_prod_oid==target_one,],10)
-
 ```
 
-#----------------------------------------
-d = data.frame(
-      data,
-      stringsAsFactors = FALSE
-    )
-    data <- datatable(d, filter = 'bottom', options = list(pageLength = 5))
-    data
+We can see for product 1446, both models recommends the customer to buy 2914 first.In the top 4 product for each recommendation, only one product is different. Looks like apriori doesn't give a surprise?
 
+<h4> Experiments on Different Combination</h4>
 
+```{r}
+#Apriori result
+#Recommendation after buying
+
+target_one = c(1446,2914)
+head(next_buy(target_one),10)
+
+#Cosine Result
+head(DT_similar_prod[DT_similar_prod$prod_oid==target_one,],10)
+```
+
+Apriori is particularly powerful when recommending complements. When there is 1 item in basket, we could hardly find difference of it and other. But when we have two products in our baskets, such as 2914 and 1446, then it can recommend new product 7423 base on this set.
